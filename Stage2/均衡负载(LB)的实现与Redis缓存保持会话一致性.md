@@ -510,7 +510,7 @@ php-fpm -t
 systemctl restart php-fpm
 ```
 
+# 问题小结
 
-
-
+两台数据库**时间不同步**会出现问题，务必**校准时间！！！**
 
