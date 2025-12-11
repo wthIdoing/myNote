@@ -38,10 +38,10 @@ vim /etc/nginx/conf.d/www.oldboy.conf
 
 ```nginx
 server {
-	listen 80;
-	server_name www.oldboy.com;
-	root /code/test;
-	index index.html;
+    listen 80;
+    server_name www.oldboy.com;
+    root /code/test;
+    index index.html;
 }
 ```
 

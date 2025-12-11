@@ -8,16 +8,16 @@
 
 ```nginx
 server {
-	listen 80;
-	server_name download.oldboy.com;
-	
-	location / {		# 这里的/实际上就是/code的占位符
-		root /code;
-		charset utf-8;				# UTF-8字符集
-		autoindex_localtime on;		# 本地时间
-		autoindex_exact_size off;	# 不要确切地(exact)显示大小，以人类可读的方式显示文件大小 KB MB GB等
-		autoindex on;				# 开启索引
-	}
+    listen 80;
+    server_name download.oldboy.com;
+
+    location / {		# 这里的/实际上就是/code的占位符
+        root /code;
+        charset utf-8;				# UTF-8字符集
+        autoindex_localtime on;		# 本地时间
+        autoindex_exact_size off;	# 不要确切地(exact)显示大小，以人类可读的方式显示文件大小 KB MB GB等
+        autoindex on;				# 开启索引
+    }
 
 }
 ```
@@ -30,30 +30,30 @@ server {
 
 ````nginx
 server {
-	listen 80;
-	server_name download.oldboy.com;
-	
-	location /download {	# /可以看作下行/code的占位符，所以拼接起来的路径是/code/download
-		root /code;	
-		charset utf-8;				
-		autoindex_localtime on;		
-		autoindex_exact_size off;	
+    listen 80;
+    server_name download.oldboy.com;
+
+    location /download {	# /可以看作下行/code的占位符，所以拼接起来的路径是/code/download
+        root /code;	
+        charset utf-8;				
+        autoindex_localtime on;		
+        autoindex_exact_size off;	
         autoindex on;
-	}
+    }
 
 }
 
 server {
-	listen 80;
-	server_name download.oldboy.com;
-	
-	location /download {	# 如果这里使用的是别名alias，那么整个/download就是直接定位到/etc下
-		alias /etc;	
-		charset utf-8;				
-		autoindex_localtime on;		
-		autoindex_exact_size off;	
+    listen 80;
+    server_name download.oldboy.com;
+
+    location /download {	# 如果这里使用的是别名alias，那么整个/download就是直接定位到/etc下
+        alias /etc;	
+        charset utf-8;				
+        autoindex_localtime on;		
+        autoindex_exact_size off;	
         autoindex on;
-	}
+    }
 
 }
 ````
@@ -68,27 +68,27 @@ server {
 
 ```nginx
 server {
-        listen 80;
-        server_name www.oldboy.com;
+    listen 80;
+    server_name www.oldboy.com;
 
-        location / {
+    location / {
         deny 10.0.0.41;			# 拒绝10.0.0.41访问
         allow all;			    # 允许其他所有IP访问
         root /code;
         index index.html;
-        }
+    }
 }
 
 server {
-        listen 80;
-        server_name www.oldboy.com;
+    listen 80;
+    server_name www.oldboy.com;
 
-        location / {
+    location / {
         allow 10.0.0.41;			    # 只允许41访问
         deny all;						# 拒绝所有IP
         root /code;
         index index.html;
-        }
+    }
 }
 
 # 允许多个不同的网段、然后拒绝所有
@@ -128,25 +128,25 @@ cat /auth_pass
 
 ```nginx
 server {
-	listen 80;
-	server_name www.oldboy.com;
+    listen 80;
+    server_name www.oldboy.com;
 
-	location / {
-    deny 10.0.0.41;
-	allow all;
-	root /code;
-	index index.html;
-	}
+    location / {
+        deny 10.0.0.41;
+        allow all;
+        root /code;
+        index index.html;
+    }
 
-	location /download {
-	auth_basic "hehe";				# 描述 必须有
-	auth_basic_user_file auth_pass; # 指定密码文件的位置
-    alias /code;
-  	charset utf-8;
-	autoindex_localtime on;
-	autoindex_exact_size off;
+    location /download {
+        auth_basic "hehe";				# 描述 必须有
+        auth_basic_user_file auth_pass; # 指定密码文件的位置
+        alias /code;
+        charset utf-8;
+        autoindex_localtime on;
+        autoindex_exact_size off;
         autoindex  on;
-        }
+    }
 }
 ```
 
@@ -154,19 +154,19 @@ server {
 
 ```nginx
 server {
-	listen 80;
-	server_name www.oldboy.com;
+    listen 80;
+    server_name www.oldboy.com;
 
-	location / {
+    location / {
         deny 10.0.0.41;
-	allow all;
-	root /code;
-	index index.html;
-	}
+        allow all;
+        root /code;
+        index index.html;
+    }
 
-	location /nginx_status {		# 这里是状态模块
-	stub_status;
-	}
+    location /nginx_status {		# 这里是状态模块
+        stub_status;
+    }
 
 }
 ```
@@ -210,13 +210,13 @@ server   {
 limit_conn_zone $remote_addr zone=conn_zone:10m;
 limit_req_zone $binary_remote_addr zone=req_zone:10m rate=50r/s;
 server {
-	listen 80;
-	server_name xbw.oldboy.com;
-	limit_conn conn_zone 10;
-	 limit_req zone=req_zone burst=10 nodelay;
-	 limit_req_status  478;  # 自定义状态码
-        root /code/xbw;
-	index index.html;
+    listen 80;
+    server_name xbw.oldboy.com;
+    limit_conn conn_zone 10;
+    limit_req zone=req_zone burst=10 nodelay;
+    limit_req_status  478;  # 自定义状态码
+    root /code/xbw;
+    index index.html;
 }
 ```
 
@@ -233,27 +233,27 @@ server {
 
 ```nginx
 server {
-        listen 80;
-        server_name prioriry.oldboy.com
+    listen 80;
+    server_name prioriry.oldboy.com
         devault_type text/html;
-        location = / {
+    location = / {
         return 200 "configuration A";
-        }
-        location / {
+    }
+    location / {
         return 200 "cinfiguration B";
-        }
-        location /documents/ {
+    }
+    location /documents/ {
         return 200 "configuration C";
-        }    
-        location ^~ /images/ {
+    }    
+    location ^~ /images/ {
         return 200 "configuration D";
-        }
-        location ~ /Documents/ {
+    }
+    location ~ /Documents/ {
         return 200 "configuration E";
-        }
-        location ~* \.(gif|jpg|jpeg){
+    }
+    location ~* \.(gif|jpg|jpeg){
         return 200 "configuration F";
-        }
+    }
 
 }
 

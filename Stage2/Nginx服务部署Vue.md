@@ -16,11 +16,11 @@ yarn build
 server{
     listen 80;
     server_name my-vue-app.com;
-    
+
     root /code/my-vue-app;
-    
+
     index index.html;
-    
+
     # -------------------------------------------------------------------
     # 核心配置：处理 Vue 路由（History 模式）
     # 这是至关重要的，它确保所有非静态文件的请求都被重写到 index.html。
@@ -37,7 +37,7 @@ server{
         expires 30d;
         log_not_found off;
     }
-    
+
 }
 ```
 

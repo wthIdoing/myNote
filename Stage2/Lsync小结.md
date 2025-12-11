@@ -34,7 +34,7 @@ settings {
 sync {
 	default.rsync,
 	source = "/data/",
-	target = "backup@backup::data",		# 主机名@地址：：模块名
+    target = "backup@backup::data",		# 主机名@地址：：模块名
 	delete = true,		# 开启全量同步
 	delay = 1,		# 延迟1秒推送
 	rsync = {

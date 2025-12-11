@@ -51,8 +51,8 @@ http {										# http响应用户的请求
     default_type  application/octet-stream;	# 如果请求的资源ngin不支持，默认为下载
 
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for"';		# 日志格式
+        '$status $body_bytes_sent "$http_referer" '
+        '"$http_user_agent" "$http_x_forwarded_for"';		# 日志格式
 
     access_log  /var/log/nginx/access.log  main;
 
@@ -98,13 +98,13 @@ nginx server配置文件
 ```nginx
 vim /etc/nginx/conf.d/fc_sim.conf
 server {
-	listen 80;						# 监听80端口
-	server_name fs.oldboy.com;		# 根据域名相应
-	
-	location / {					# 网址最后省略的/，例如10.0.0.7/
-	root /code/fc;					# 指定/访问哪个目录
-	index index.html index.htm		# 指定访问的首页
-	}
+    listen 80;						# 监听80端口
+    server_name fs.oldboy.com;		# 根据域名相应
+
+    location / {					# 网址最后省略的/，例如10.0.0.7/
+        root /code/fc;					# 指定/访问哪个目录
+        index index.html index.htm		# 指定访问的首页
+    }
 }
 ```
 

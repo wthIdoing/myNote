@@ -62,8 +62,8 @@ http {										# http响应用户的请求
     default_type  application/octet-stream;	# 如果请求的资源ngin不支持，默认为下载
 
     log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
-                      '$status $body_bytes_sent "$http_referer" '
-                      '"$http_user_agent" "$http_x_forwarded_for"';		# 日志格式
+        '$status $body_bytes_sent "$http_referer" '
+        '"$http_user_agent" "$http_x_forwarded_for"';		# 日志格式
 
     access_log  /var/log/nginx/access.log  main;
 
@@ -73,7 +73,7 @@ http {										# http响应用户的请求
     keepalive_timeout  65;	# 长连接的超时时间
 
     #gzip  on;				# 是否压缩资源传给用户（等级1-9）
-	client_max_body_size 0;		# 1次请求默认上传1M文件，设置为0关闭限制,不设置可能会出现413错误
+    client_max_body_size 0;		# 1次请求默认上传1M文件，设置为0关闭限制,不设置可能会出现413错误
     include /etc/nginx/conf.d/*.conf;	# 将conf.d下所有的.conf结尾包含进当前配置
 }
 ```
@@ -287,19 +287,19 @@ vim /etc/nginx/conf.d/wp.conf
 
 ```nginx
 server {
-	listen 80;
-	server_name www.wp.com;
-	root /code/wordpress;
-	
-	location / {
-		index index.php index.html;
-	}
+    listen 80;
+    server_name www.wp.com;
+    root /code/wordpress;
 
-	location ~ \.php$ {
-		fastcgi_pass 127.0.0.1:9000;
-		fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-		include fastcgi_params;
-	}
+    location / {
+        index index.php index.html;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
 
 }
 ```

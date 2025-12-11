@@ -109,19 +109,19 @@ php-fpm -t
 ```nginx
 vim /etc/nginx/conf.c/php.conf
 server {
-        listen 80;
-        server_name php.oldboy.com;
-        root /code;
+    listen 80;
+    server_name php.oldboy.com;
+    root /code;
 
-        location / {
-                index index.php index.html;
-        }
+    location / {
+        index index.php index.html;
+    }
 
-        location ~ \.php$ {
-                fastcgi_pass 127.0.0.1:9000;
-                fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-                include fastcgi_params;
-        }
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
 
 }
 ```
@@ -143,20 +143,20 @@ systemctl restart nginx
 
 ```php
 vim /code/mysql.php
-<?php
-	$servername = "localhost";
-	$username = "root";
-	$password = "123456";
-	
-	// 创建连接
-	$conn = mysqli_connect($servername, $username, $password);
-	
-	// 检测连接
-	if(!$conn){
-		die("Connection failed: " . mlysqli_connect_error());
-	}
-	echo "成功与MySQL数据库建立连接"
-?>
+    <?php
+    $servername = "localhost";
+$username = "root";
+$password = "123456";
+
+// 创建连接
+$conn = mysqli_connect($servername, $username, $password);
+
+// 检测连接
+if(!$conn){
+    die("Connection failed: " . mlysqli_connect_error());
+}
+echo "成功与MySQL数据库建立连接"
+    ?>
 ```
 
 ### 以WordPress举例，部署业务
@@ -164,19 +164,19 @@ vim /code/mysql.php
 ```nginx
 vim /etc/nginx/conf.d/wp.conf
 server {
-	listen 80;
-	server_name www.wp.com;
-	root /code/wordpress;
-	
-	location / {
-		index index.php index.html;
-	}
+    listen 80;
+    server_name www.wp.com;
+    root /code/wordpress;
 
-	location ~ \.php$ {
-		fastcgi_pass 127.0.0.1:9000;
-		fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-		include fastcgi_params;
-	}
+    location / {
+        index index.php index.html;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass 127.0.0.1:9000;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
 
 }
 ```

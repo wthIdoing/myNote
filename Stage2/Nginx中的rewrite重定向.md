@@ -4,6 +4,8 @@
 
 **URL=协议://域名:端口+/路径/文件+?参数&参数**
 
+​		     服务器信息+ $uri        + $args
+
 ### Nginx伪四层代理
 
 修改LB中的nginx.conf配置
@@ -29,7 +31,7 @@ stream {
         listen 5555;
         proxy_pass web02;
     }
-    
+
 }
 # 因为使用的是四层转发，所以要在http块外进行配置
 http {
@@ -65,20 +67,20 @@ server {
     listen 80;
     server_name test.oldboy.com;
     root /code/test;
-    
+
     location / {
         rewrite /1.html /2.html;	# 1.html->2.html
         rewrite /2.html /3.html;	# 2.html->3.html
     }
-    
+
     location /2.html {
         rewrite /2.html /a.html;	# 2.html->a.html
     }
-    
+
     location /3.html {
         rewrite /3.html /b.html;	# 3.html->b.html
     }
-    
+
 }
 ```
 
@@ -90,22 +92,22 @@ Nginx服务不会只在一个location中进行重定向，所以
 
 ```nginx
 server {
-        listen 80;
-        server_name test.oldboy.com;
-        root /code/test/;
+    listen 80;
+    server_name test.oldboy.com;
+    root /code/test/;
 
-        location / {
+    location / {
         rewrite /1.html /2.html break; # 直接停止重定向
         rewrite /2.html /3.html; 
-        }
+    }
 
-        location /2.html {
+    location /2.html {
         rewrite /2.html /a.html;	
-        }
+    }
 
-        location /3.html {
+    location /3.html {
         rewrite /3.html /b.html;
-        }
+    }
 }
 ```
 
@@ -119,22 +121,22 @@ break会停止所有location的重定向，所以
 
 ```nginx
 server {
-        listen 80;
-        server_name test.oldboy.com;
-        root /code/test/;
+    listen 80;
+    server_name test.oldboy.com;
+    root /code/test/;
 
-        location / {
+    location / {
         rewrite /1.html /2.html last; # 停止在这个location块中的重定向
         rewrite /2.html /3.html; 		
-        }
+    }
 
-        location /2.html {
+    location /2.html {
         rewrite /2.html /a.html;	# 最终2.html会被这个location匹配到，进而跳转至a.html
-        }
+    }
 
-        location /3.html {
+    location /3.html {
         rewrite /3.html /b.html;
-        }
+    }
 }
 ```
 
@@ -146,13 +148,13 @@ last会跳出这个语句所在的重定向(可以理解为continue跳出本次�
 
 ```nginx
 server {
-	listen 80;
-	server_name rewrite.oldboy.com;
-	root /code/test;
+    listen 80;
+    server_name rewrite.oldboy.com;
+    root /code/test;
 
-	location ~ /(.*abc)$ {		# 正则表达式，匹配到任意以abc为结尾的URI资源
-   	rewrite ^(.*)$ /ccc/bbb/2.html;	# 会重定向	到/code/test/ccc/bbb/2.html
-	}
+    location ~ /(.*abc)$ {		# 正则表达式，匹配到任意以abc为结尾的URI资源
+        rewrite ^(.*)$ /ccc/bbb/2.html;	# 会重定向	到/code/test/ccc/bbb/2.html
+    }
 }
 ```
 
@@ -161,7 +163,7 @@ server {
     listen 80;
     server_name rewrite.oldboy.com;
     root /code/test;
-    
+
     location ~ /2014/ccc/2.html {
         rewrite ^(.*)$ /2025/ccc/bbb/2.html;	# 当用户访问....com/2014/ccc/2.html会跳转到  任意字符/2025/ccc/bbb/2.html
     }
@@ -172,24 +174,24 @@ server {
 
 ```nginx
 server {
-	listen 80;
-	server_name rewrite.oldboy.com;
-	root /code/test;
+    listen 80;
+    server_name rewrite.oldboy.com;
+    root /code/test;
 
-	location ~ /2014/ccc/2.html {
-   	rewrite ^/2014/(.*)$ /2025/$1;	# 这里使用到了与sed相似的后向引用，(/ccc/2.html)的内容被引用到了$1
-	}
-      #用户访问/2014/ccc/2.html实际上真实访问的是/2025/ccc/2.html
+    location ~ /2014/ccc/2.html {
+        rewrite ^/2014/(.*)$ /2025/$1;	# 这里使用到了与sed相似的后向引用，(/ccc/2.html)的内容被引用到了$1
+    }
+    #用户访问/2014/ccc/2.html实际上真实访问的是/2025/ccc/2.html
 }
 server {
-	listen 80;
-	server_name rewrite.oldboy.com;
-	root /code/test;
+    listen 80;
+    server_name rewrite.oldboy.com;
+    root /code/test;
 
-	location / {
-   	rewrite ^/test/2014/(.*)/(.*)$ /2025/$1/$2;
-	}
-      #用户访问/test/2014/ccc/2.html实际上真实访问的是/2025/ccc/bbb/2.html
+    location / {
+        rewrite ^/test/2014/(.*)/(.*)$ /2025/$1/$2;
+    }
+    #用户访问/test/2014/ccc/2.html实际上真实访问的是/2025/ccc/bbb/2.html
 }
 ```
 
@@ -197,15 +199,15 @@ server {
 
 ```nginx
 server {
-	listen 80;
-	server_name rewrite.oldboy.com;
-	charset utf-8,gbk;
-	root /code/test;
-      error_page 403 404 500 501 502 @error_test;
+    listen 80;
+    server_name rewrite.oldboy.com;
+    charset utf-8,gbk;
+    root /code/test;
+    error_page 403 404 500 501 502 @error_test;
 
-      location @error_test {
-      rewrite ^(.*)$ /404.html break;	# 当遇到以上异常状态码时就会重定向到指定页面，并且停止重定向
-      }
+    location @error_test {
+        rewrite ^(.*)$ /404.html break;	# 当遇到以上异常状态码时就会重定向到指定页面，并且停止重定向
+    }
 }
 ```
 
@@ -213,16 +215,16 @@ server {
 
 ```nginx
 server {
-	listen 80;
-	server_name rewrite.oldboy.com;
-	charset utf-8,gbk;
-	root /code/test;
-	index index.html;
-        set $args "&showoffline=1";
-	
-	if ($remote_addr = 10.0.0.1) {
+    listen 80;
+    server_name rewrite.oldboy.com;
+    charset utf-8,gbk;
+    root /code/test;
+    index index.html;
+    set $args "&showoffline=1";
+
+    if ($remote_addr = 10.0.0.1) {
         rewrite ^(.*)$ http://rewrite.oldboy.com$1;	# 在输入rewrite.oldboy.com网址时，后面默认携带指定的args参数，也就是showoffline=1
-        }
+    }
 }
 ```
 
@@ -230,21 +232,21 @@ server {
 
 ```nginx 
 server {
-	listen 80;
-	server_name rewrite.oldboy.com;
-	charset utf-8,gbk;
-	root /code/test;
-	index index.html;
+    listen 80;
+    server_name rewrite.oldboy.com;
+    charset utf-8,gbk;
+    root /code/test;
+    index index.html;
 
-	set $ip 0;	# 刚好这个变量名称叫ip
+    set $ip 0;	# 刚好这个变量名称叫ip
 
-	if ($remote_addr = 10.0.0.1){
-	set $ip 1;  # 如果客户端IP是10.0.0.1则重新赋值为1
-	}
-	
-	if ($ip = 0){
-	rewrite (.*) /wh.html break;
-	}
+    if ($remote_addr = 10.0.0.1){
+        set $ip 1;  # 如果客户端IP是10.0.0.1则重新赋值为1
+    }
+
+    if ($ip = 0){
+        rewrite (.*) /wh.html break;
+    }
 
 }
 ```
@@ -253,57 +255,57 @@ server {
 
 ```nginx
 server {
-        listen 80;
-        server_name rewrite.oldboy.com;
-        charset utf-8,gbk;
-        root /code/test;
+    listen 80;
+    server_name rewrite.oldboy.com;
+    charset utf-8,gbk;
+    root /code/test;
 
-        #location /test {
-        #rewrite ^(.*)$ http://www.baidu.com permanent;
-        #return 301 http://www.baidu.com;
-        #rewrite ^(.*)$ http://www.baidu.com redirect;
-        #return 302 http://www.baidu.com;
-        #}
+    #location /test {
+    #rewrite ^(.*)$ http://www.baidu.com permanent;
+    #return 301 http://www.baidu.com;
+    #rewrite ^(.*)$ http://www.baidu.com redirect;
+    #return 302 http://www.baidu.com;
+    #}
 
-        #location /abc/1.html {
-        #       rewrite ^(.*)$ /ccc/bbb/2.html;
-        #       #return 302 /ccc/bbb/2.html;
+    #location /abc/1.html {
+    #       rewrite ^(.*)$ /ccc/bbb/2.html;
+    #       #return 302 /ccc/bbb/2.html;
 
-		#}
-  
-        #location ~ /(.*abc)$ {
-        #       rewrite ^(.*)$ /ccc/bbb/2.html;
-        #}
+    #}
 
-        #location ~ /2014/ccc/bbb/2.html {
-        #       rewrite ^/2014/(.*)$ /$1;
-        #}
+    #location ~ /(.*abc)$ {
+    #       rewrite ^(.*)$ /ccc/bbb/2.html;
+    #}
 
-        error_page 403 404 500 501 502 @error_test;     # 配置了异常状态跳转页面
+    #location ~ /2014/ccc/bbb/2.html {
+    #       rewrite ^/2014/(.*)$ /$1;
+    #}
 
-        location @error_test {
-                rewrite ^(.*)$ /404.html break;
-        }
+    error_page 403 404 500 501 502 @error_test;     # 配置了异常状态跳转页面
 
-        #index index.html;
-        #set $args "&showoffline=1";
+    location @error_test {
+        rewrite ^(.*)$ /404.html break;
+    }
 
-        #if ($remote_addr = 10.0.0.1) {
-        #       rewrite ^(.*)$ http://rewrite.oldboy.com$1;
-        #}
+    #index index.html;
+    #set $args "&showoffline=1";
 
-        set $ip 0;		#  这里的$ip只是一个自定义的变量，并不是Nginx的内置变量
+    #if ($remote_addr = 10.0.0.1) {
+    #       rewrite ^(.*)$ http://rewrite.oldboy.com$1;
+    #}
 
-        if ($remote_addr = 10.0.0.1){
-                set $ip 1;
-        }
+    set $ip 0;		#  这里的$ip只是一个自定义的变量，并不是Nginx的内置变量
 
-        if ($ip = 0){
-                rewrite (.*) /wh.html break;
-        }
+    if ($remote_addr = 10.0.0.1){
+        set $ip 1;
+    }
+
+    if ($ip = 0){
+        rewrite (.*) /wh.html break;
+    }
 
 }
-  
+
 ```
 
 ## **return+状态码与rewrite重定向的区别（重要！）**
@@ -407,13 +409,13 @@ server {
 ```nginx
 set $ip 0;	# 刚好这个变量名称叫ip
 
-	if ($remote_addr = 10.0.0.1){
-	set $ip 1;  # 如果客户端IP是10.0.0.1则重新赋值为1
-	}
-	
-	if ($ip = 0){
-	rewrite (.*) /wh.html break;
-	}
+if ($remote_addr = 10.0.0.1){
+    set $ip 1;  # 如果客户端IP是10.0.0.1则重新赋值为1
+}
+
+if ($ip = 0){
+    rewrite (.*) /wh.html break;
+}
 ```
 
 可以看到同样是访问rewrite.oldboy.com，本地(10.0.0.1)可以访问到首页，而其他IP都会进行跳转

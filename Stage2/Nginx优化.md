@@ -1,0 +1,463 @@
+# Nginx优化
+
+### 压力测试工具Apache Benchmark
+
+```bash
+ab -n 200 -c 2 http://127.0.0.1/
+#-n 要执行的请求数
+#-c 请求的并发数
+#-k 是否开启长连接
+```
+
+### Nginx最大进程数量与最大文件句柄
+
+| **概念**                | **对应配置/变量**                  | **作用范围 (Scope)** | **限制的层次**                       | **总结**                                                    |
+| ----------------------- | ---------------------------------- | -------------------- | ------------------------------------ | ----------------------------------------------------------- |
+| **最大文件句柄**        | `fs.file-max`                      | **整个操作系统**     | **系统级硬限制 (System Hard Limit)** | 整个 Linux 系统所有进程能打开的 FD 总数。                   |
+| **最大文件描述符**      | `ulimit -n`                        | **单个进程**         | **进程级限制 (Process Limit)**       | 单个用户或进程能打开的 FD 最大数。                          |
+| **`\* - nofile 65535`** | `/etc/security/limits.conf` 配置行 | **用户/进程启动时**  | **配置工具 (Configuration Tool)**    | **用来设定**上述“最大文件描述符” (`ulimit -n`) **的工具**。 |
+
+```bash
+vim /etc/security/limits.conf
+* - nofile 65535
+1、系统全局性修改
+# * 代表所有用户
+* soft nofile 25535
+* hard nofile 25535
+
+2.用户局部性修改
+#针对root用户，soft仅提醒，hard限制，nofile打开最大文件数
+root soft nofile 65535
+root hard nofile 65535
+
+
+
+3.进程局部性修改
+#针对nginx进程，nginx自带配置，这个是要写在Nginx配置文件中的
+worker_rlimit_nofile 30000
+```
+
+### Nginx内核参数
+
+```bash
+4.调整内核参数：让time_wait状态重用(端口重用)[flag]
+vim /etc/sysctl.conf
+net.ipv4.tcp_tw_reuse = 1     # 开启端口复用
+net.ipv4.tcp_timestamps = 0   # 禁用时间戳
+sysctl -p    #可以查看我们添加的内核参数
+sysctl -a    #可以查看所有内核参数
+```
+
+### 代理服务优化
+
+```nginx
+通常nginx作为代理服务，负责转发用户的请求，那么在转发的过程中建议开启HTTP长连接，用于减少握手次数，降低服务器损耗。
+负载均衡的优化:
+upstream http_backend {
+    server 127.0.0.1:8080;
+    keepalive 16;   #负载均衡和后端长连接
+}
+
+server {
+    ...
+        location /http/ {
+        proxy_pass http://http_backend;
+        proxy_http_version 1.1;         #对于http协议应该指定为1.1
+        proxy_set_header Connection ""; #清除“connection”头字段
+        proxy_next_upstream error timeout http_500 http_502 http_503 http_504;  #平滑过渡
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Forwared-For $proxy_add_x_forwarded_for;
+        proxy_connect_timeout 30s;      # 代理连接web超时时间
+        proxy_read_timeout 60s;         # 代理等待web响应超时时间
+        proxy_send_timeout 60s;         # web回传数据至代理超时时间
+        proxy_buffering on;             # 开启代理缓冲区,web回传数据至缓冲区,代理边收边传返回给客户端
+        proxy_buffer_size 32k;          # 代理接收web响应的头信息的缓冲区大小
+        proxy_buffers 4 128k;           # 缓冲代理接收单个长连接内包含的web响应的数量和大小
+        ...
+    }
+}
+
+
+PHP优化
+upstream fastcgi_backend {
+    server 127.0.0.1:9000;
+    keepalive 8;
+}
+
+server {
+    ...
+        location /fastcgi/ {
+        fastcgi_pass fastcgi_backend;
+        fastcgi_param  SCRIPT_FILENAME  $document_root$fastcgi_script_name;
+        fastcgi_keep_conn on;   		# 开启长连接
+        fastcgi_connect_timeout 60s;	# 超时时间
+        include fastcgi_params;
+        ...
+    }
+}
+```
+
+### 静态资源优化
+
+```nginx
+# 资源在浏览器缓存7天
+server {
+    listen 80;
+    server_name www.oldboy.com;
+    root /code/test;
+    index index.html;
+    location ~ .*\.(jpg|gif|png)$ {
+        expires      7d;
+    }
+}
+
+# 取消js、css、html等静态文件缓存
+server {
+    listen 80;
+    server_name www.oldboy.com;
+    root /code/test;
+    index index.html;
+
+    location ~ .*\.(js|css|html)$ {
+        add_header Cache-Control no-store;
+        add_header Pragma no-cache;
+    }
+
+    location ~ .*\.(jpg|gif|png)$ {
+        expires      7d;
+    }
+}
+```
+
+### 文件高效传输
+
+sendfile off 与 sendfile on的区别
+
+![image-20251211214402485](C:\Users\yellowsea\AppData\Roaming\Typora\typora-user-images\image-20251211214402485.png)
+
+**1.第一次拷贝：DMA 拷贝**
+
+- **动作：** CPU 指令（`read()` 系统调用）发起，**DMA 引擎**将数据从磁盘读取到 **内核缓冲区**。
+- **位置：** 磁盘 $\rightarrow$ **内核缓冲区**
+
+**2.第二次拷贝：CPU 拷贝**
+
+- **动作：** CPU 将数据从**内核缓冲区**拷贝到 **用户缓冲区**（User Space 的 Nginx 进程内存）。
+- **位置：** **内核缓冲区** $\rightarrow$ **用户缓冲区**
+
+**3.第三次拷贝：CPU 拷贝**
+
+- **动作：** CPU 指令（`write()` 系统调用）发起，将数据从**用户缓冲区**拷贝到 **Socket 缓冲区**（属于内核空间）。
+- **位置：** **用户缓冲区** $\rightarrow$ **Socket 缓冲区**
+
+**4.第四次拷贝：DMA 拷贝**
+
+- **动作：** CPU 指令发起，**DMA 引擎**将数据从 **Socket 缓冲区**拷贝到网卡（NIC）缓冲区，等待发送。
+- **位置：** **Socket 缓冲区** $\rightarrow$ 网络协议栈/网卡
+
+```bash
+配置方式:
+    sendfile        on;
+    #tcp_nopush     on;  大文件业务开启、比如静态文件 CDN缓存,优化带宽和减少网络包数量（牺牲一点点延迟）
+    #tcp_nodelay         小文件业务开启、比如金融平台、在线游戏类业务,优化延迟和实时性（牺牲一点点带宽）
+```
+
+| **特性**       | **tcp_nodelay on**                      | **tcp_nopush on**                                           |
+| -------------- | --------------------------------------- | ----------------------------------------------------------- |
+| **主要目标**   | 降低延迟，提高实时性                    | 减少网络包数量，提高带宽利用率                              |
+| **影响对象**   | Nagle 算法                              | 数据聚集和 TCP `PSH` 标志                                   |
+| **工作原理**   | 立即发送任何大小的数据包。              | 聚集响应头和响应体，达到 MSS 后或数据准备完毕后一次性发送。 |
+| **推荐业务**   | API 接口、WebSockets、SSH、小型响应体。 | 大文件下载、高清图片、视频流、静态资源。                    |
+| **Nginx 搭配** | 独立使用。                              | 必须搭配 `sendfile on` 使用，否则无效。                     |
+
+### 静态资源压缩
+
+```tex
+gzip传输压缩，传输前压缩，传输后解压
+Syntax: gzip on | off;
+Default: gzip off;
+Context: http, server, location, if in location
+
+gzip压缩哪些文件
+Syntax: gzip_types mime-type ...;
+Default: gzip_types text/html;
+Context: http, server, location
+
+gzip压缩比率，加快传输，但压缩本身比较耗费服务器性能
+Syntax: gzip_comp_level level;
+Default:gzip_comp_level level 1;
+Context: http, server, location
+
+
+gzip压缩协议版本，压缩使用在http哪个协议，主流选择1.1版本
+Syntax: gzip_http_version 1.0 | 1.1;
+Default:gzip_http_version 1.1;
+Context: http, server, location
+```
+
+##### 示范配置
+
+```nginx
+server {
+    listen 80;
+    server_name www.oldboy.com;
+    root /code/test;
+    index index.html;
+
+    # 取消缓存
+    location ~ .*\.(js|css|html)$ {
+        add_header Cache-Control no-store;
+        add_header Pragma no-cache;
+    }
+
+    # 缓存7天
+    location ~ .*\.(jpg|gif|png)$ {
+        expires      7d;
+    }
+    
+    # 资源压缩
+    location ~ .*\.(txt|xml|html|json|js|css)$ {
+        gzip on;
+        gzip_http_version 1.1;
+        gzip_comp_level 4;
+        gzip_types text/plain application/json application/x-javascript application/css application/xml text/javascrip
+            t;
+    }
+}
+```
+
+### 防盗链
+
+##### WEB01的配置
+
+```nginx
+server {
+    listen 80;
+    server_name www.oldboy.com;
+    root /code/test;
+    index index.html;
+}
+```
+
+```html
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>oldboy.com</title>
+    </head>
+    <body style="background-color:pink;">
+        <center><img src="http://www.test.com/31.png"/></center>
+    </body>
+</html>
+```
+
+##### WEB02的配置
+
+```nginx
+server {
+    listen 80;
+    server_name www.test.com;
+    root /code/test;
+    index index.html;
+    location ~ .*\.(jpg|png|gif) {
+        valid_referers none blocked *.baidu.com;
+        if ( $invalid_referer ) {
+            #return 403;
+            rewrite ^(.*)$ /d.png break;      
+        }
+    }
+}
+```
+
+### 跨域访问
+
+##### WEB02的配置
+
+```nginx
+server {
+    listen 80;
+    server_name www.test.com;
+    root /code/test;
+    index index.html;
+}
+```
+
+测试网页
+
+```html
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <title>测试ajax和跨域访问</title>
+        <script src="http://libs.baidu.com/jquery/2.1.4/jquery.min.js"></script>
+    </head>
+    <script type="text/javascript">
+        $(document).ready(function(){
+            $.ajax({
+                type: "GET",
+                url: "http://www.oldboy.com",	# 此域名是WEB01的域名
+                success: function(data) {
+                alert("sucess 成功了!!!");
+            },
+                error: function() {
+                    alert("fail!!,跨不过去啊，不让进去啊，只能...!");
+                }
+        });
+        });
+    </script>
+    <body>
+        <h1>跨域访问测试</h1>
+    </body>
+</html>
+```
+
+##### WEB01的配置
+
+```nginx
+server {
+    listen 80;
+    server_name www.oldboy.com;
+    root /code/test;
+    index index.html;
+}
+```
+
+如果要允许WEB02跨域请求
+
+```nginx
+server {
+    listen 80;
+    server_name www.oldboy.com;
+    root /code/test;
+    index index.html;
+    location ~ .*\.(html|htm)$ {
+        add_header Access-Control-Allow-Origin *;
+        add_header Access-Control-Allow-Methods GET,POST,PUT,DELETE,OPTIONS;
+    }
+}
+```
+
+### CPU亲和
+
+在nginx.conf主配置文件中进行修改
+
+```nginx
+配置CPU亲和方式
+# 第一种绑定组合方式（不推荐）
+worker_processes 12;
+worker_cpu_affinity 000000000001 000000000010 000000000100 000000001000 000000010000 000000100000 000001000000 000010000000 000100000000 001000000000 010000000000 10000000000;
+
+# 第二种方式(使用较少)
+worker_processes 2;
+worker_cpu_affinity 101010101010 010101010101;
+
+# 第三种最佳绑定方式，修改nginx启动的work进程为自动。
+worker_processes  auto;
+worker_cpu_affinity auto;
+
+
+
+#在Nginx主配置文件中修改
+vim /etc/nginx/nginx.conf
+user  nginx;
+worker_processes  auto;
+worker_cpu_affinity auto;   # 配置CPU自动亲和
+
+error_log  /var/log/nginx/error.log notice;
+pid        /var/run/nginx.pid;
+....
+```
+
+Nginx优化总结
+
+```bash
+vim /etc/nginx/nginx.conf
+```
+
+```nginx
+user www;                   # nginx进程启动用户
+worker_processes auto;      #与cpu核心一致即可
+worker_cpu_affinity auto;   # cpu亲和
+
+error_log /var/log/nginx/error.log warn;    # 错误日志
+pid /run/nginx.pid;
+worker_rlimit_nofile 35535;  #每个work能打开的文件描述符，调整至1w以上,负荷较高建议2-3w 不用
+
+events {
+    use epoll;                  # 使用epoll高效网络模型 默认的
+    worker_connections 65535;   # 限制每个进程能处理多少个连接，10240x[cpu核心]
+}
+
+http {
+    include             mime.types;
+    default_type        application/octet-stream;
+    charset utf-8,gbk;      # 统一使用utf-8字符集
+
+    # 定义日志格式
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+        '$status $body_bytes_sent "$http_referer" '
+        '"$http_user_agent" "$http_x_forwarded_for"';
+
+    #定义json日志格式              
+    log_format json_access '{"@timestamp":"$time_iso8601",'
+        '"host":"$server_addr",'
+        '"clientip":"$remote_addr",'
+        '"size":$body_bytes_sent,'
+        '"responsetime":$request_time,'
+        '"upstreamtime":"$upstream_response_time",'
+        '"upstreamhost":"$upstream_addr",'
+        '"http_host":"$host",'
+        '"url":"$uri",'
+        '"domain":"$host",'
+        '"xff":"$http_x_forwarded_for",'
+        '"referer":"$http_referer",'
+        '"status":"$status"}';
+
+    access_log  /var/log/nginx/access.log  main;    # 访问日志
+
+    server_tokens off;          # 禁止浏览器显示nginx版本号
+    client_max_body_size 20m;  # 文件上传大小限制调整 默认1M
+
+    # 文件高效传输，静态资源服务器建议打开
+    sendfile            on;
+    tcp_nopush          on;
+    # 文件实时传输，动态资源服务建议打开,需要打开keepalive
+    tcp_nodelay         on;
+    keepalive_timeout   65;
+
+    # Gzip 压缩
+    gzip on;
+    gzip_disable "MSIE [1-6]\.";    #针对IE浏览器不进行压缩
+    gzip_http_version 1.1;
+    gzip_comp_level 2;      #压缩级别
+    gzip_buffers 16 8k;     #压缩的缓冲区
+    gzip_min_length 1024;   #文件大于1024字节才进行压缩，默认值20
+    gzip_types text/plain text/css application/json application/x-javascript text/xml application/xml application/xml+rss text/javascript image/jpeg;
+
+    # 虚拟主机
+    include /etc/nginx/conf.d/*.conf;
+}
+```
+
+1、CPU亲和
+
+2、调整每个worker进程的最大连接数、默认1024
+
+3、文件的高效传输sendfile
+
+4、开启tcp长连接，以及长连接超时时间keepalived
+
+5、开启文件传输压缩gzip
+
+6、开启静态文件expires缓存
+
+7、隐藏nginx版本号
+
+8、配置防盗链、以及跨域访问
+
+9、优雅显示nginx错误页面
+
+10、nginx加密传输https优化
+
+11、防DDOS、cc攻击，限制单IP并发连接，以及http请求
+
