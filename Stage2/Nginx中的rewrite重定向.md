@@ -1,5 +1,9 @@
 # Nginx中的rewrite重定向
 
+## URL的完整表达（重要！）
+
+URL=协议://域名:端口+/路径/文件+?参数&参数
+
 ### Nginx伪四层代理
 
 修改LB中的nginx.conf配置
