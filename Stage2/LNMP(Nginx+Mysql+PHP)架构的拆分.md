@@ -39,7 +39,7 @@ mysql
 #### 在MySQL中创建远程用户并授权
 
 ```mysql
-grant all on *.* to yellowsea@'%' identified by '123456';
+grant all on *.* to remote_user@'%' identified by '123456';
 flush privileges;
 ```
 

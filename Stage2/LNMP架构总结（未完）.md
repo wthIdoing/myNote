@@ -45,7 +45,7 @@ nginx -v
 
 ```nginx
 vim /etc/nginx/nginx.conf
-user  nginx;				# 启动nginx的用户，安装Nginx服务会自动创建该用户
+user  www;				# 启动nginx的用户，安装Nginx服务会自动创建该用户
 worker_processes  auto;		# 进程数量（自动则与CPU核心数量有关）
 
 error_log  /var/log/nginx/error.log notice;	# 错误日志的位置
@@ -422,3 +422,120 @@ df -h	# 查看是否挂载
 ![image-20251209085313165](C:\Users\yellowsea\AppData\Roaming\Typora\typora-user-images\image-20251209085313165.png)
 
 测试成功
+
+## Redis部署
+
+为了防止会话丢失，应该将不同服务器的session的cookie存放在同一台服务器的Redis缓存中
+
+### 在Redis服务器上要做的事
+
+##### 1.安装Redis
+
+```bash
+yum -y install redis
+```
+
+##### 2.修改监听IP
+
+```bash
+vim /etc/redis.conf
+87:bind 127.0.0.1 172.16.1.51	# 这里是临时拿MySQL服务器代替以下，所以主机号是51
+```
+
+##### 3.设置Redis密码
+
+```bash
+vim /etc/redis.conf
+1044:requirepass 123456
+```
+
+##### 4.启动Redis
+
+```bash
+systemctl start redis
+systemctl enable redis
+```
+
+### WEB01服务器上要做的事
+
+#### 配置PHP session指向Redis
+
+```bash
+vim /etc/php.ini
+```
+
+```bash
+1222 session.save_handler = redis
+1255 session.save_path = "tcp://172.16.1.51:6379?auth=123456"
+```
+
+##### 注释www.conf的倒数第3和4行
+
+```bash
+vim /etc/php-fpm.d/www.conf
+;php_value[session.save_handler] = files		        # 这行
+;php_value[session.save_path]    = /var/lib/php/session # 这行
+php_value[soap.wsdl_cache_dir]  = /var/lib/php/wsdlcache
+;php_value[opcache.file_cache]  = /var/lib/php/opcache
+```
+
+#### 编译PHP连接Redis的插件
+
+##### 1.下载Redis源码包
+
+```bash
+wget https://pecl.php.net/get/redis-5.3.7.tgz
+tar -zxvf redis-5.3.7.tgz
+```
+
+##### 2.配置Redis并编译安装
+
+```bash
+cd redis-5.3.7/
+phpize
+./configure
+make && make install
+```
+
+##### 3.开启Redis插件功能，配置文件增加以下内容 
+
+```bash
+vim /etc/php.ini
+1357:extension=redis.so
+```
+
+##### 4.检查并重启PHP服务
+
+```bash
+php-fpm -t
+systemctl restart php-fpm
+```
+
+### WEB02要做的事
+
+##### 1.将WEB01配置好的文件拷贝过来
+
+```bash
+scp web01:/etc/php.ini /etc
+scp web01:/etc/php-fpm.d/www.conf /etc/php-fpm.d/
+```
+
+##### 2.下载、配置、编译并安装Redis插件
+
+```bash
+wget https://pecl.php.net/get/redis-5.3.7.tgz
+tar -zxvf redis-5.3.7.tgz
+cd redis-5.3.7
+
+phpize
+./configure
+make
+sudo make install
+```
+
+##### 3.检测并重启PHP服务
+
+```bash
+php-fpm -t
+systemctl restart php-fpm
+```
