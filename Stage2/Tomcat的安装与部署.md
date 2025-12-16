@@ -1,0 +1,365 @@
+# Tomcat的安装与部署
+
+jar包与war包的区别
+
+| **特性**     | **JAR 包 (Java Archive)**                                    | **WAR 包 (Web Application Archive)**                         |
+| ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| **用途**     | **通用 Java 应用程序或库**，可执行程序（如命令行工具）或类库。 | **Java Web 应用程序**，用于部署到 Web 容器/应用服务器。      |
+| **内容**     | 编译后的 Java 类文件 (`.class`)、资源文件（如属性文件）和可选的 `MANIFEST.MF` 文件。 | 除了 Java 类和资源外，还包括 **Web 组件**：HTML/JSP 页面、CSS、JavaScript、图片、Web 配置文件（如 `web.xml`）以及依赖的库文件（位于 `WEB-INF/lib`）。 |
+| **结构**     | 相对简单，通常包含包目录结构和 `META-INF` 目录。             | 遵循严格的 Web 应用程序目录结构 (如 `WEB-INF/` 及其子目录 `classes/`, `lib/` 等)。 |
+| **运行环境** | 可以通过 `java -jar` 命令在 **JRE/JDK** 环境中直接运行（如果是可执行 JAR），或者作为依赖库被其他项目引用。 | 必须部署到支持 Java Servlet/JSP 的 **Web 容器**（如 Apache Tomcat、Jetty）或 **应用服务器**（如 WildFly、WebSphere）中才能运行。 |
+| **定位**     | 独立的功能模块或组件。                                       | 完整的 Web 站点或应用。                                      |
+
+## Tomcat的部署
+
+Tomcat官网
+
+https://tomcat.apache.org/
+
+为了安装tomcat，必须要有jvm虚拟机。不过为了一步到位，直接下载JDK(Java Development Kit)就好了，这里使用的是JDK8。
+
+上传好包以后使用rpm指令安装
+
+```bash
+rpm -ivh jdk-8u181-linux-x64.rpm
+```
+
+下载并安装tomcat 9 
+
+```bash
+wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.113/bin/apache-tomcat-9.0.113.tar.gz
+```
+
+一半来说解压即用的包会放在自定义目录或者/ser/local中，这里使用自定义目录
+
+```bash
+mkdir /soft
+tar -xf apache-tomcat-9.0.113.tar.gz -C /soft/
+```
+
+做一个软链接，以便更新版本时方便回滚版本
+
+```bash
+ln -s /soft/apache-tomcat-9.0.113 /soft/tomcat
+```
+
+Tomcat的目录结构
+
+```bash
+bin             ---主要包含启动和关闭tomcat的脚本（启停java脚本依赖jar包文件）
+conf            ---tomcat配置文件的目录(站点配置：server.xml)
+lib             ---tomcat运行时需要加载的jar包
+logs            ---tomcat日志存放位置
+temp            ---tomcat临时存放文件路径
+webapps         ---tomcat默认站点目录
+work            ---tomcat运行时产生的缓存文件
+```
+
+### Tomcat的启动
+
+##### 1.可以在tomcat目录的/bin目录中启动
+
+```bash
+cd /soft/tomcat/bin
+./startup.sh	# 相对路径启动
+/soft/tomcat/bin/startup.sh	# 绝对路径启动
+```
+
+启动后会占用8080端口(tomcat的默认端口为8080)
+
+## 配置systemd服务（重要）
+
+##### 2.可以配置systemctl启动(两种输入方法)
+
+```bash
+vim /usr/lib/systemd/system/tomcat.service
+[Unit]
+Description=Apache Tomcat Server
+After=network.target remote-fs.target nss-lookup.target
+ 
+[Service]
+Type=forking
+ExecStart=/soft/tomcat/bin/startup.sh
+ExecStop=/soft/tomcat/bin/shutdown.sh
+ExecRestart=/soft/tomcat/bin/shutdown.sh  && sleep2  && /soft/tomcat/bin/startup.sh
+ 
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+cat << EOF >/usr/lib/systemd/system/tomcat.service
+[Unit]
+Description=Apache Tomcat Server
+After=network.target remote-fs.target nss-lookup.target
+ 
+[Service]
+Type=forking
+ExecStart=/soft/tomcat/bin/startup.sh
+ExecStop=/soft/tomcat/bin/shutdown.sh
+ExecRestart=/soft/tomcat/bin/shutdown.sh  && sleep2  && /soft/tomcat/bin/startup.sh
+ 
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+##### 重新加载systemctl
+
+```bash
+systemctl daemon-reload
+```
+
+> [!IMPORTANT]
+>
+> 另：有/usr/sbin命令的服务有另一种启停方式，同一时间只能使用一种方式启停。于tomcat而言，如果使用了systemctl启动，就不能使用./shutdown.sh停止
+
+```bash
+/usr/sbin/nginx
+/usr/sbin/nginx -s stop # 停止
+/usr/sbin/nginx -s reload # 重新加载
+```
+
+### Tomcat的配置文件
+
+嵌套结构为
+
+Server->Service->Connector(s) + engine->Host->Context 
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<Server port="8005" shutdown="SHUTDOWN">
+    <Listener className="org.apache.catalina.startup.VersionLoggerListener" />
+    <Listener className="org.apache.catalina.core.AprLifecycleListener" />
+    <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+    <Listener className="org.apache.catalina.mbeans.GlobalResourcesLifecycleListener" />
+    <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+
+    <GlobalNamingResources>
+
+        <Resource name="UserDatabase" auth="Container"
+                  type="org.apache.catalina.UserDatabase"
+                  description="User database that can be updated and saved"
+                  factory="org.apache.catalina.users.MemoryUserDatabaseFactory"
+                  pathname="conf/tomcat-users.xml" />
+    </GlobalNamingResources>
+
+    <Service name="Catalina">
+        <Connector port="8080" protocol="HTTP/1.1"
+                   connectionTimeout="20000"
+                   redirectPort="8443"
+                   maxParameterCount="1000"
+                   />
+        <Engine name="Catalina" defaultHost="localhost">
+
+            <Realm className="org.apache.catalina.realm.LockOutRealm">
+
+                <Realm className="org.apache.catalina.realm.UserDatabaseRealm"
+                       resourceName="UserDatabase"/>
+            </Realm>
+            <Host name="localhost"  appBase="webapps"
+                  unpackWARs="true" autoDeploy="true">
+                <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+                       prefix="localhost_access_log" suffix=".txt"
+                       pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+            </Host>  
+        </Engine>
+    </Service>
+</Server>
+```
+
+#### 快速部署静态页面
+
+```bash
+vim /soft/tomcat/conf/server.xml
+```
+
+在默认的<Host>标签下复制粘贴改一改
+> [!WARNING]
+>
+> <Host>标签的appBase路径下，必须要指定一个ROOT，并将页面放在ROOT下，tomcat才会识别。不过这个目录可以又tomcat**自动生成**，相当于Nginx中的root
+>
+> <Context>标签的docBase路径下，不需要ROOT即可被tomcat识别，而且会**覆盖**appBase的路径，但是目录要**手动创建**，相当于Nginx中的alias
+
+> [!NOTE]
+>
+> 其中<Context>标签中的/tt，表示使用浏览器访问时，输入的URI
+>
+> 例如这里就是diy.oldboy.com/tt
+
+```xml
+<Host name="diy.oldboy.com"  appBase="/code/diy/"
+      unpackWARs="true" autoDeploy="true">
+    <Context docBase="/code/tt" path="/tt" reloadable="true" />
+    <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+           prefix="diy.oldboy.com" suffix=".log"
+           pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+</Host>
+
+```
+
+以上配置中，如果没有context标签，
+
+URL为diy.oldboy.com
+
+生效路径为
+
+/code/diy/ROOT/index
+
+被Context的docBase覆盖后，
+
+URL为diy.oldboy.com/tt
+
+生效路径为
+
+/code/tt
+
+重启生效
+
+```bash
+systemctl restart tomcat
+```
+
+## 自带的管理页面
+
+如果直接访问10.0.0.7:8080，则会进入tomcat自带的管理页面，但是用户没有对应的角色则无法访问
+
+需要给用户赋予相应的角色（manager-gui、admin-gui）才能进入管理页
+
+#### 首先赋予用户角色
+
+```bash
+vim /soft/tomcat/conf/tomcat-users.xml
+```
+
+```xml
+<role rolename="manager-gui"/>
+<role rolename="admin-gui"/>
+<user username="tomcat" password="123456" roles="manager-gui,admin-gui"/>
+</tomcat-users>	<!--这是最后一行-->
+```
+
+由于项目只允许127.0.0.1访问，所以赋予角色也无法访问，需要修改允许访问的IP
+
+需要修改这辆个文件
+
+```bash
+vim /soft/tomcat/webapps/host-manager/META-INF/context.xml
+vim /soft/tomcat/webapps/manager/META-INF/context.xml
+```
+
+```xml
+allow="127.0.0.0/8,::1/128" />
+```
+
+修改为
+
+```xml
+allow="10.0.0.0/8,::1/128" />
+```
+
+重启生效
+
+## 安装zrlog博客
+
+在server.xml文件中进行配置
+
+```xml
+<Host name="www.zrlog.com"  appBase="/code/zrlog/"
+      unpackWARs="false" autoDeploy="false">
+
+    <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+           prefix="zrlog_access" suffix=".log"
+           pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+
+</Host>
+```
+
+在NFS服务器上配置共享文件夹
+
+```bash
+vim /etc/exports
+```
+
+```tex
+/data 172.16.1.0/24(rw,sync,all_squash,anonuid=1000,anongid=1000)
+/data/wp 172.16.1.0/24(rw,sync,all_squash,anonuid=1000,anongid=1000)
+/data/zh 172.16.1.0/24(rw,sync,all_squash,anonuid=1000,anongid=1000)
+/data/zrlog 172.16.1.0/24(rw,sync,all_squash,anonuid=1000,anongid=1000)
+```
+
+使用exportfs -r更新NFS的导出列表
+
+```bash
+exportfs -r
+```
+
+```bash
+systemctl restart nfs-utils
+```
+
+将nfs:/data/zrlog挂载到WEB01和WEB02的/code/zrlog/ROOT下
+
+WEB01中
+
+```bash
+mount -t nfs nfs:/data/zrlog/ /code/zrlog/ROOT/
+```
+
+另外还要在db01服务器上创建zrlog数据库
+
+DB01中
+
+```bash
+mysql
+```
+
+```mysql
+create database zrlog;
+```
+
+## 配置负载均衡（Nginx转发）
+
+在LB01中
+
+```bash
+vim /etc/nginx/conf/zrlog.conf
+```
+
+```nginx
+upstream tomcat {
+    server 172.16.1.7:8080;
+    server 172.16.1.8:8080;
+}
+server {
+    listen 443 ssl;
+    server_name www.zrlog.com;
+    ssl_certificate ssl_key/server.crt;
+    ssl_certificate_key ssl_key/server.key;
+    # 配置 SSL 会话缓存，提高性能
+    ssl_session_cache shared:SSL:1m;
+    # 设置 SSL 会话超时时间
+    ssl_session_timeout 5m;
+    # 自定义设置使用的TLS协议的类型以及加密套件（以下为配置示例，请您自行评估是否需要配置）
+    ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE:ECDH:AES:HIGH:!NULL:!aNULL:!MD5:!ADH:!RC4;
+    # 指定允许的 TLS 协议版本，TLS协议版本越高，HTTPS通信的安全性越高，但是相较于低版本TLS协议，高版本TLS协议对浏览器的兼容性较差
+    ssl_protocols TLSv1.2 TLSv1.3;
+    # 优先使用服务端指定的加密套件
+    ssl_prefer_server_ciphers on;
+
+    include lv_env;
+
+    location / {
+        proxy_pass http://tomcat;
+    }
+
+}
+
+#配置将用户访问http请求强制跳转https
+server {
+    listen 80;
+    server_name www.zrlog.com;
+    return 302 https://$server_name$request_uri;
+}
+```
+
