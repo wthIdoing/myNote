@@ -1,0 +1,449 @@
+# 资源的动静分离与Tomcat会话保持
+
+由于session只保存在运行服务的服务器中，所以当用户通过负载均衡访问服务器集群时，会话不能保持一致，所以需要将服务器集群的会话保存在统一的Redis中
+
+### 会话保持：通过负载均衡访问不同的服务器
+
+WEB01与WEB02做的事
+
+```bash
+cd /soft/tomcat/conf
+vim /server.xml
+```
+
+```xml
+<Host name="session.oldboy.com"  appBase="/session/"
+      unpackWARs="true" autoDeploy="true">
+    <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+           prefix="session" suffix=".log"
+           pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+</Host>
+```
+
+```bash
+systemctl restart tomcat
+```
+
+准备相应的代码目录
+
+```bash
+mkdir -p /session/ROOT
+vim /session/ROOT/index.jsp
+```
+
+```jsp
+<body>
+    <%
+    //HttpSession session = request.getSession(true);
+    System.out.println(session.getCreationTime());
+    //                web02这里的字符串要改为web02
+    out.println("<br> web01 SESSION ID:" + session.getId() + "<br>");	
+    out.println("Session created time is :" + session.getCreationTime()
+                + "<br>");
+    %>
+</body>
+```
+
+分别添加DNS解析访问两个服务器，显示的SESSION ID是不同的
+
+#### 添加负载均衡
+
+LB01上要做的事情
+
+```bash
+cd /etc/nginx/conf
+vim tomcat_session.conf
+```
+
+```nginx
+upstream se {
+    server 172.16.1.7:8080;
+    server 172.16.1.8:8080;
+}
+server {
+    listen 80;
+    server_name session.oldboy.com;
+
+    location / {
+        proxy_pass http://se;
+        proxy_set_header Host $http_host;
+    }
+}
+```
+
+配置DNS解析后访问负载均衡服务器，每次刷新都会有不同的SESSION ID
+
+### 在WEB01与WEB02上部署Redis插件
+
+WEB01与WEB02要做的事，下载插件
+
+```bash
+wget https://github.com/ran-jit/tomcat-cluster-redis-session-manager/releases/download/4.0/tomcat-cluster-redis-session-manager.zip
+```
+
+```bash
+unzip tomcat-cluster-redis-session-manager.zip
+```
+
+将插件的jar包copy到tomcat的/lib目录中
+
+```bash
+cp tomcat-cluster-redis-session-manager/lib/* /soft/tomcat/lib/
+```
+
+将插件的redis.properties文件copy到tomcat的conf目录中
+
+```bash
+cp tomcat-cluster-redis-session-manager/conf/redis-data-cache.properties /soft/tomcat/conf/
+```
+
+修改redis.properties配置
+
+```bash
+vim /soft/tomcat/conf/redis.porperties
+```
+
+```properties
+redis.hosts=172.16.1.51:6379
+redis.password=123456
+```
+
+修改tomcat/conf/context.xml文件，在<Cotext>标签内添加
+
+```xml
+<Valve className="tomcat.request.session.redis.SessionHandlerValve" />
+<Manager className="tomcat.request.session.redis.SessionManager" />
+```
+
+重启tomcat服务
+
+### java运行jar包
+
+安装好Java以后，下载通过页面管理Nginx的项目
+
+https://gitee.com/cym1102/nginxWebUI/
+
+```bash
+mkdir /home/nginxWebUI
+wget -O /home/nginxWebUI/nginxWebUI.jar https://gitee.com/cym1102/nginxWebUI/releases/download/4.1.9/nginxWebUI-4.1.9.jar
+```
+
+下载好.jar包以后，可以后台挂起运行
+
+```bash
+nohup java -jar -Dfile.encoding=UTF-8 /home/nginxWebUI/nginxWebUI.jar --server.port=8080 --project.home=/home/nginxWebUI/ > /dev/null &
+```
+
+企业环境中运行，需要添加数据库的启动参数
+
+```bash
+nohup java -jar -Dfile.encoding=UTF-8 /home/nginxWebUI/nginxWebUI.jar --server.port=8080 --project.home=/home/nginxWebUI/  --spring.datasource.url=172.16.1.51  --spring.datasource.username=root --spring.datasource.password=pass> /dev/null &
+```
+
+将启动方式写入**启动脚本**
+
+```bash
+vim start_nginx_ui.sh
+```
+
+```sh
+nohup java -jar -Dfile.encoding=UTF-8 /home/nginxWebUI/nginxWebUI.jar --server.port=8080 --project.home=/home/nginxWebUI/ &>/dev/null &
+```
+
+**停止脚本**
+
+```bahs
+vim stop_nginx_ui.sh
+```
+
+```sh
+ps axu|grep jar|grep -v grep|awk '{print $2}'|xargs kill -9
+```
+
+## 动静分离
+
+由于Nginx处理静态资源性能更优，tomcat处理动态资源更优，所以通过Nginx劫持单独处理静态资源，而放行动态资源给tomcat处理
+
+### 单台服务器实现动静分离
+
+WEB01上配置动静分离
+
+```bash
+cd /etc/nginx/conf
+vim tomcat.conf
+```
+
+```nginx
+server {
+    listen 80;
+    server_name tom.oldboy.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    location ~ \.(png|jpg|svg)$ {  	# 将静态图片匹配到/code/images
+        root /code/images;
+    }
+}
+```
+
+由于以上配置中区分大小写匹配(~)优先级更高，静态图片被Nginx劫持，只能访问/code/images下的文件。
+
+此时访问tom.oldboy.com看不到tomcat主页中的图片。
+
+这时将tomcat默认页面中的图片拷贝至/code/images
+
+```bash
+mkdir -p /code/images
+cp /soft/tomcat/webapps/ROOT/*.{png,svg} /code/images/
+chown -R www.www /code/images
+```
+
+### 集群实现动静分离
+
+###### WEB01创建静态页面
+
+```bash
+vim /etc/nginx/conf/static.conf
+```
+
+```nginx
+server {
+    listen 80;
+    server_name www.tom.com;
+    location / {
+        root /code;
+        index index.html;
+    }
+}
+```
+
+DNS解析并访问www.tom.com/404.jpg（如果/code下有404.jpg的话）
+
+###### WEB02创建动态页面
+
+```bash
+vim /soft/tomcat/conf/server.xml
+```
+
+```xml
+<Host name="www.tom.com"  appBase="/session/"
+      unpackWARs="true" autoDeploy="true">
+    <Valve className="org.apache.catalina.valves.AccessLogValve" directory="logs"
+           prefix="session" suffix=".log"
+           pattern="%h %l %u %t &quot;%r&quot; %s %b" />
+</Host>
+```
+
+```bash
+vim /session/ROOT/index.jsp
+```
+
+```jsp
+<%@ page language="java" import="java.util.*" pageEncoding="utf-8"%>
+<HTML>
+    <HEAD>
+        <TITLE>oldboy JSP Page</TITLE>
+    </HEAD>
+    <BODY>
+        <%
+        Random rand = new Random();
+        out.println("<h1>oldboy随机数:<h1>");
+        out.println(rand.nextInt(99)+100);
+        %>
+    </BODY>
+</HTML>
+```
+
+DNS解析并访问www.tom.com:8080，可以看到对应的JSP页面
+
+###### 通过负载均衡集成后端的静态资源与动态资源
+
+LB01上做的事
+
+```bash
+vim /etc/nginx/conf/dynamic_static.conf
+```
+
+```nginx
+upstream static {
+    server 172.16.1.7:80;
+}
+upstream dynamic {
+    server 172.16.1.8:8080;
+}
+server {
+    listen 80;
+    server_name www.tom.com;
+    root /code;
+    index index.html;
+
+    location ~* \.(jpg|png|gif)$ {
+        proxy_pass http://static;
+        proxy_set_header Host $http_host;
+    }
+
+    location ~ \.jsp {
+        proxy_pass http://dynamic;
+        proxy_set_header Host $http_host;
+    }
+}
+```
+
+编写对应的index.html
+
+```bash
+vim /code/index.html
+```
+
+```html
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>测试ajax和跨域访问</title>
+		<script src="http://libs.baidu.com/jquery/2.1.4/jquery.min.js"></script>
+	</head>
+	<script type="text/javascript">
+		$(document).ready(function(){
+			$.ajax({
+				type: "GET",
+				url: "http://www.tom.com/index.jsp",
+				success: function(data){
+					$("#get_data").html(data)
+				},
+				error: function() {
+					alert("哎呦喂,失败了,回去检查你服务去~");
+				}
+			});
+		});
+	</script>
+	<body>
+		<h1>测试动静分离</h1>
+		<img src="http://www.tom.com/404.jpg">
+		<div id="get_data"></div>
+	</body>
+</html>
+```
+
+解析并访问负载均衡服务器的www.tom.com
+
+### PC端与移动端分离
+
+可以通过均衡负载（代理转发）将不同终端设备的访问调度到不同的后端节点
+
+WEB01上配置静态资源
+
+```bash
+vim /etc/nginx/conf/devices.conf
+```
+
+```nginx
+charset utf-8,gbk;
+server {
+    listen 9090;
+    server_name m.oldboy.com;
+    location / {
+        root /code/9090;
+        index index.html;
+    }
+}
+server {
+    listen 9091;
+    server_name m.oldboy.com;
+    location / {
+        root /code/9091;
+        index index.html;
+    }
+}
+server {
+    listen 9092;
+    server_name m.oldboy.com;
+    location / {
+        root /code/9092;
+        index index.html;
+    }
+}
+
+```
+
+写好配置文件后，创建对应的目录和index.html
+
+```bash
+mkdir /code/{9090..9092}
+echo 提供Android页面 > /code/9090/index.html
+echo 提供Iphone页面 > /code/9091/index.html
+echo 提供PC页面 > /code/9092/index.html
+```
+
+检查语法无误后重启Nginx服务
+
+```bash
+nginx -t
+systemctl restart nginx
+```
+
+LB01负载均衡实现转发的不同的端口
+
+```bash
+vim /etc/nginx/conf/devices.conf
+```
+
+```nginx
+upstream android {
+    server 172.16.1.7:9090;
+}
+
+upstream iphone {
+    server 172.16.1.7:9091;
+}
+
+upstream pc {
+    server 172.16.1.7:9092;
+}
+
+server {
+    listen 80;
+    server_name m.oldboy.com;
+    charset 'utf-8';
+
+    location / {
+
+        #如果客户端来源是Android则跳转到Android的资源；
+        if ($http_user_agent ~* "Android") {
+            proxy_pass http://android;
+        }
+
+        #如果客户端来源是Iphone则跳转到Iphone的资源；
+        if ($http_user_agent ~* "Iphone") {
+            proxy_pass http://iphone;
+        }
+
+        #如果客户端是IE浏览器则返回403错误；
+        if ($http_user_agent ~* "MSIE") {
+            return 403;
+        }
+
+        #默认跳转pc资源；
+        proxy_pass http://pc;
+    }
+}
+```
+
+确认语法无误后重启Nginx服务
+
+```bash
+nginx -t
+systemctl restart nginx
+```
+
+> [!NOTE]
+>
+> 另：除了$http_user_agent可以判断，其他变量都可以进行判断
+
+```nginx
+if ($remote_addr ~* 10.0.0.1) {	# 访问的IP地址进行判断
+    proxy_pass http://www.baidu.com;
+}
+```
+
