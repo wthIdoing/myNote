@@ -275,6 +275,37 @@ allow="10.0.0.0/8,::1/128" />
 </Host>
 ```
 
+WEB01和WEB02上创建对应的ROOT文件夹，并在**其中一台**服务器上安装zrlog，**避免会话不一致**
+
+```bash
+mkdir -p /code/zrlog/ROOT/
+cd /code/zrlog/ROOT
+wget https://dl.zrlog.com/release/javax-war/zrlog.war
+unzip zrlog.war
+```
+
+另外还要在DB01服务器上创建zrlog数据库
+
+DB01中
+
+```bash
+mysql
+```
+
+```mysql
+create database zrlog;
+```
+
+WEB01解析到DNS后访问www.zrlog.com:8080进行安装，再将安装文件同步到WEB02
+
+```bash
+scp -r /code/zrlog/ROOT/* web02:/codt/zrlog/ROOT/
+```
+
+
+
+### 静态文件挂载
+
 在NFS服务器上配置共享文件夹
 
 ```bash
@@ -298,24 +329,10 @@ exportfs -r
 systemctl restart nfs-utils
 ```
 
-将nfs:/data/zrlog挂载到WEB01和WEB02的/code/zrlog/ROOT下
-
-WEB01中
+将nfs:/data/zrlog挂载到WEB01和WEB02的/code/zrlog/ROOT/attached/thumbnail/下
 
 ```bash
-mount -t nfs nfs:/data/zrlog/ /code/zrlog/ROOT/
-```
-
-另外还要在db01服务器上创建zrlog数据库
-
-DB01中
-
-```bash
-mysql
-```
-
-```mysql
-create database zrlog;
+mount -t nfs nfs:/data/zrlog/ /code/zrlog/ROOT//attached/thumbnail/
 ```
 
 ## 配置负载均衡（Nginx转发）
@@ -361,5 +378,23 @@ server {
     server_name www.zrlog.com;
     return 302 https://$server_name$request_uri;
 }
+```
+
+> [!TIP]
+>
+> lv_ens包含的内容：
+
+```nginx
+proxy_set_header Host $http_host;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_http_version 1.1;
+
+proxy_connect_timeout 30;
+proxy_send_timeout 60;
+proxy_read_timeout 60;
+
+proxy_buffering on;
+proxy_buffer_size 32k;
+proxy_buffers 4 128k;
 ```
 
