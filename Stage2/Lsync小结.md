@@ -24,7 +24,7 @@ cat /etc/lsyncd.conf
 >
 > 格式必须正确，否则服务启动失败
 
-```bash
+```properties
 settings {
 	logfile = "/var/log/lsyncd/lsyncd.log",
 	satusFile = "/var/log/lsyncd/lsyncd.status",

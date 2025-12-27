@@ -53,7 +53,7 @@ yum -y install keepalived
 vim /etc/keepalived/keepalived.conf
 ```
 
-```tex
+```properties
 global_defs {                   # 全局配置
     router_id lb02              # 标识身份->名称
 }
@@ -120,7 +120,7 @@ chmod +x check_nginx.sh
 
 最终的keepalived配置文件
 
-```tex
+```properties
 global_defs {
     router_id lb02
 }

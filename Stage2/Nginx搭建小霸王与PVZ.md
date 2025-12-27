@@ -10,6 +10,11 @@
 
 ```bash
 vim /etc/yum.repos.d/nginx.repo
+```
+
+
+
+```properties
 [nginx-stable]		# nginx稳定版
 name=nginx stable repo		# 仓库名称
 baseurl=http://nginx.org/packages/centos/7/$basearch/	#  下载地址，由于麒麟系统限制，centos后改为centos版本号

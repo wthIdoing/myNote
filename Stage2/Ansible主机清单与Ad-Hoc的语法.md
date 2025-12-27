@@ -31,7 +31,7 @@ mkdir /etc/ansible	# ansible不会创建这个目录，必须手动创建
 vim /etc/ansible/ansible.cfg	# ansible不会创建配置文件，必须手动配置
 ```
 
-```tex
+```properties
 [defaults]
 host_key_checking = False	 # 控制 Ansible 是否检查远程主机的 SSH 密钥指纹
 deprecation_warnings = False # 控制是否显示“弃用警告”
@@ -68,7 +68,7 @@ yum -y install sshpass
 
 ##### 单台定义
 
-```tex
+```properties
 10.0.0.7 ansible_ssh_user=root ansible_ssh_port=22 ansible_ssh_pass='oldboy123.com'
 ```
 
@@ -134,7 +134,7 @@ web[01:02] ansible_ssh_user=root ansible_ssh_port=22 ansible_ssh_pass='oldboy123
 >
 > 此时，组lnmp就仅包含dbs与webs两个组
 
-```bash
+```properties
 nfs ansible_ssh_host=10.0.0.31 ansible_ssh_user=root ansible_ssh_port=22 ansible_ssh_pass='oldboy123.com'
 
 [dbs]
@@ -151,7 +151,7 @@ webs
 
 ##### 共同定义的变量
 
-```bash
+```properties
 nfs ansible_ssh_host=10.0.0.31 ansible_ssh_user=root ansible_ssh_port=22 ansible_ssh_pass='oldboy123.com'
 
 [dbs]

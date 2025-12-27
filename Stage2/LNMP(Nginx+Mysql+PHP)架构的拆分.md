@@ -163,6 +163,9 @@ systemctl restart nfs
 
 ```bash
 vim /var/lib/nfs/etab
+```
+
+```properties
 /data/zh        172.16.1.0/24(rw,sync,wdelay,hide,nocrossmnt,secure,root_squash,all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=1000,anongid=1000,sec=sys,rw,secure,root_squash,all_squash)
 /data/wp        172.16.1.0/24(rw,sync,wdelay,hide,nocrossmnt,secure,root_squash,all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=1000,anongid=1000,sec=sys,rw,secure,root_squash,all_squash)
 /data   172.16.1.0/24(rw,sync,wdelay,hide,nocrossmnt,secure,root_squash,all_squash,no_subtree_check,secure_locks,acl,no_pnfs,anonuid=1000,anongid=1000,sec=sys,rw,secure,root_squash,all_squash)

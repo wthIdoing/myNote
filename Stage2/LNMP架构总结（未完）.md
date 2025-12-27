@@ -10,6 +10,9 @@
 
 ```bash
 vim /etc/yum.repos.d/nginx.repo
+```
+
+```properties
 [nginx-stable]		
 name=nginx stable repo		
 baseurl=http://nginx.org/packages/centos/7/$basearch/	
@@ -20,12 +23,12 @@ gpgkey=https://nginx.org/keys/nginx_signing.key
 
 说文解字环节：
 
-```bash
+```properties
 [nginx-stable]		# nginx稳定版
 name=nginx stable repo		# 仓库名称
 baseurl=http://nginx.org/packages/centos/7/$basearch/	#  下载地址，由于麒麟系统限制，centos后改为centos版本号
 gpgcheck=0					# 校验数据包的完整性
-enabled=1
+enabled=1					# 表示此仓库可用
 gpgkey=https://nginx.org/keys/nginx_signing.key		# 官网上的key值，gpgcheck为0，可以删除此行
 ```
 
