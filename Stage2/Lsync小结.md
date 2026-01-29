@@ -27,7 +27,7 @@ cat /etc/lsyncd.conf
 ```properties
 settings {
 	logfile = "/var/log/lsyncd/lsyncd.log",
-	satusFile = "/var/log/lsyncd/lsyncd.status",
+	statusFile = "/var/log/lsyncd/lsyncd.status",
 	maxProcesses = 2,		# 最大连接数
 	nodaemon = false,		# 开启守护进程
 }
@@ -38,7 +38,7 @@ sync {
 	delete = true,		# 开启全量同步
 	delay = 1,		# 延迟1秒推送
 	rsync = {
-		binary = "user/bin/rsync",		# 二进制命令文件
+		binary = "/usr/bin/rsync",		# 二进制命令文件
 		password_file = "/etc/rysnc.passwd",	# 指定密码文件
 		archive = true,		# 相当于-a，保留文件属性
 		compress = true,		# 相当于-z，压缩
